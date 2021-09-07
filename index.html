@@ -3,7 +3,7 @@
 
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-        <title>Babylon Template</title>
+        <title>Triangulations</title>
 
         <style>
             html, body {
@@ -22,7 +22,7 @@
         </style>
 
         <script src="https://cdn.babylonjs.com/babylon.js"></script>
-        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+        <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
         <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
     </head>
 
@@ -68,7 +68,55 @@
             console.log('bary coordinates second triangle', bary2);
             const bary3 = baryCoords([2,3], [[4,5], [5,3], [3,2]]);
             console.log('bary coordinates third triangle', bary3);
+
+            const pointLineDist = function(point, line) {
+                const lineDir = line[1].subtract(line[0]);
+
+                const a = BABYLON.Vector3.Cross(point.subtract(line[0]), lineDir).length();
+                const b = lineDir.length();
+
+                return a/b;
+            }
+
+            const points3d = [
+                new BABYLON.Vector3(2,2,0),
+                new BABYLON.Vector3(-2,2,0),
+                new BABYLON.Vector3(0,0,5),
+                new BABYLON.Vector3(-2,-2,0),
+                new BABYLON.Vector3(2,-2,0)
+            ];
+
+            const pointPlaneDistance = function(p, [a, b, c]) {
+                const normal = BABYLON.Vector3.Cross(
+                    b.subtract(a), 
+                    c.subtract(a)).normalize();
+
+                const dist = BABYLON.Vector3.Dot(
+                    normal, 
+                    p.subtract(a));
+
+                return dist;
+            }
+
+            const plane = [points3d[2], points3d[4], points3d[0]];
+            console.log(`distance from pt ${points3d[1]} to plane ${pointPlaneDistance(points3d[1], plane)}`);
+            console.log(`distance from pt ${points3d[3]} to plane ${pointPlaneDistance(points3d[3], plane)}`);
+            const plane2 = [points3d[4], points3d[2], points3d[1]];
+            console.log(`distance from pt ${points3d[0]} to plane ${pointPlaneDistance(points3d[0], plane2)}`);
+            console.log(`distance from pt ${points3d[3]} to plane ${pointPlaneDistance(points3d[3], plane2)}`);
             
+            const tetrVolume = function([a,b,c,d]) {
+                const ad = a.subtract(d);
+                const bd = b.subtract(d);
+                const cd = c.subtract(d);
+                const cross = BABYLON.Vector3.Cross(bd, cd);
+                const dot = BABYLON.Vector3.Dot(ad, cross);
+                return Math.abs(dot) / 6;
+            }
+
+            const tetr = [points3d[0], points3d[1], points3d[2], points3d[4]];
+            console.log(`tetrahedron volume is ${tetrVolume(tetr)}`);
+
             const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 20, new BABYLON.Vector3(0, 0, 0));
             camera.attachControl(canvas, true);
             const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(1, 1, 0));
@@ -92,7 +140,6 @@
                 const material = new BABYLON.StandardMaterial(name + "_material");
                 material.diffuseColor = BABYLON.Color3.FromHexString(colorHex);
                 material.specular = 80;
-                material.alpha = 0.8;
 
                 const center = new BABYLON.Vector3();
                 for (let i = 0; i < points.length; i++) {
@@ -119,6 +166,9 @@
 
                 return triGroup;
             }
+
+            // GUI
+            const advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
 
             const buildSweepTriangulation = function(points) {
                 const lines = [];
@@ -164,6 +214,23 @@
                 }
 
                 const sweepGroup = buildTriangulationVisual(points, lines, "sweep", "#e1eb31", new BABYLON.Vector3(0,-5.5,0));
+                
+
+                const rect1 = new BABYLON.GUI.Rectangle();
+                rect1.width = 0.2;
+                rect1.height = "40px";
+                rect1.cornerRadius = 20;
+                rect1.color = "Orange";
+                rect1.thickness = 4;
+                rect1.background = "green";
+                advancedTexture.addControl(rect1);
+                rect1.linkWithMesh(sweepGroup);   
+                rect1.linkOffsetY = -150;
+                rect1.linkOffsetX = 400;
+
+                const label = new BABYLON.GUI.TextBlock();
+                label.text = "Sweep Triangulation";
+                rect1.addControl(label);
 
                 return sweepGroup;
             }
@@ -243,7 +310,25 @@
 
                 }
                 // when frontier is all depleted, we have our triangulation
-                return buildTriangulationVisual(points, lines, "advGroup", "#ff2c92", new BABYLON.Vector3(0,0,0));
+                const group = buildTriangulationVisual(points, lines, "advGroup", "#ff2c92", new BABYLON.Vector3(0,0,0));
+
+                const rect1 = new BABYLON.GUI.Rectangle();
+                rect1.width = 0.2;
+                rect1.height = "40px";
+                rect1.cornerRadius = 20;
+                rect1.color = "red";
+                rect1.thickness = 4;
+                rect1.background = "pink";
+                advancedTexture.addControl(rect1);
+                rect1.linkWithMesh(group);   
+                rect1.linkOffsetY = -150;
+                rect1.linkOffsetX = 400;
+
+                const label = new BABYLON.GUI.TextBlock();
+                label.text = "Incremental Triangulation";
+                rect1.addControl(label);
+
+                return group;
             }
 
             const hull = [
@@ -324,8 +409,6 @@
                         const diagonal = BABYLON.Ray.CreateNewFromTo(points[1], points[n]);
                         if (rayInsideDomain(diagonal, domain)) {
                             const [domainHalfA, domainHalfB] = cutDomainWithLine([points[1], points[n]], domain);
-                            // const pointsA = getDomainPoints(domainHalfA);
-                            // const pointsB = getDomainPoints(domainHalfB);
 
                             const lineDiagonal = [points[1], points[n]]
                             const triA = buildDiagonalTriangulation([...domainHalfA, [points[n], points[1]]]);
@@ -334,7 +417,6 @@
                             return [
                                 ...triA,
                                 ...triB,
-                                // [points[1], points[n]],
                             ];
                         }
                     } 
@@ -345,6 +427,21 @@
 
             const tri = buildDiagonalTriangulation(hull);
             const diagonal = buildTriangulationVisual(points, tri, "diagonal", "#fe9da0", new BABYLON.Vector3(0,5.5,0));
+            const rect1 = new BABYLON.GUI.Rectangle();
+            rect1.width = 0.2;
+            rect1.height = "40px";
+            rect1.cornerRadius = 20;
+            rect1.color = "black";
+            rect1.thickness = 4;
+            rect1.background = "purple";
+            advancedTexture.addControl(rect1);
+            rect1.linkWithMesh(diagonal);   
+            rect1.linkOffsetY = -150;
+            rect1.linkOffsetX = 400;
+
+            const label = new BABYLON.GUI.TextBlock();
+            label.text = "Diagonal Triangulation";
+            rect1.addControl(label);
 
 
             const triangles = [
@@ -378,7 +475,7 @@
 
                 //for each triangle compute the circumcircle
                 for (let i = 0; i < triangles.length; i++) {
-                    circumcircles.push(getCircumcenter(triangle[i]));
+                    circumcircles.push(getCircumcenter(triangles[i]));
                 }
 
                 // for each triangle, connect circumcircles of pairs of adjacent edges
@@ -413,7 +510,7 @@
             }
 
             const lines = buildVoronoiFromDelaunay(triangles);
-            const vorGroup = buildTriangulationVisual(points, lines, "voronoi", "#fd629b", new Vector3(0,0,0));
+            const vorGroup1 = buildTriangulationVisual(points, lines, "voronoi", "#fd629b", new BABYLON.Vector3(0,0,0));
 
             return scene;
         };
